@@ -17,6 +17,11 @@ if str(ROOT) not in sys.path:
 
 
 @pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.fixture
 def triage_module(monkeypatch):
     """Reload the triage module with a mocked Gemini model."""
     fake_model = MagicMock()
@@ -64,16 +69,21 @@ def test_orchestrate_issue_labels_and_triggers_fix(monkeypatch):
     orchestrator = importlib.import_module("src.orchestrator")
     orchestrator = importlib.reload(orchestrator)
 
-    mock_github_instance = MagicMock()
     mock_repo = MagicMock()
     mock_issue = MagicMock()
-    mock_repo.get_issue.return_value = mock_issue
-    mock_github_instance.get_repo.return_value = mock_repo
 
-    monkeypatch.setattr(orchestrator, "Github", MagicMock(return_value=mock_github_instance))
     monkeypatch.setattr(orchestrator, "triage_issue", MagicMock(return_value="bug"))
     mock_fix = AsyncMock()
     monkeypatch.setattr(orchestrator, "fix_bug", mock_fix)
+
+    async def fake_call_in_thread(func, *args, **kwargs):
+        if func is orchestrator._fetch_repo_and_issue:
+            return mock_repo, mock_issue
+        if func is mock_issue.add_to_labels:
+            return func(*args, **kwargs)
+        raise AssertionError(f"Unexpected call_in_thread target: {func}")
+
+    monkeypatch.setattr(orchestrator, "_call_in_thread", fake_call_in_thread)
 
     payload = {
         "action": "opened",
@@ -129,3 +139,39 @@ def test_webhook_accepts_valid_signature(monkeypatch, main_module):
 
     assert response.status_code == 200
     orchestrate_mock.assert_awaited_once_with(payload_dict)
+
+
+@pytest.mark.anyio("asyncio")
+async def test_fix_bug_offloads_blocking_calls(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
+
+    fix_module = importlib.import_module("agents.fix")
+    fix_module = importlib.reload(fix_module)
+
+    fake_model = MagicMock()
+    fake_model.generate_content.return_value = MagicMock(text="print('ok')")
+    monkeypatch.setattr(fix_module, "model", fake_model)
+    monkeypatch.setattr(fix_module.genai, "configure", MagicMock())
+
+    repo = MagicMock()
+    issue = MagicMock()
+    issue.body = "See src/app.py"
+
+    async def fake_call_in_thread(func, *args, **kwargs):
+        if func is fix_module._get_repo:
+            return repo
+        if func is fix_module._get_file_snippets:
+            return {"src/app.py": "print('hello')"}
+        if func is fake_model.generate_content:
+            return func(*args, **kwargs)
+        if func is issue.create_comment:
+            return func(*args, **kwargs)
+        raise AssertionError(f"Unexpected thread target: {func}")
+
+    monkeypatch.setattr(fix_module, "_call_in_thread", fake_call_in_thread)
+
+    await fix_module.fix_bug(7, "octo/demo", issue)
+
+    fake_model.generate_content.assert_called_once()
+    issue.create_comment.assert_called_once()
