@@ -3,7 +3,7 @@
 Automates issue labeling and bug fixes via Gemini AI and PyGithub.
 
 ## Setup
-1. Copy .env.example to .env and fill in values.
+1. Copy .env.example to .env and fill in values. **GITHUB_WEBHOOK_SECRET is required** so the app can verify incoming webhook signatures.
 2. pip install -r requirements.txt
 3. uvicorn src.main:app --reload
 
