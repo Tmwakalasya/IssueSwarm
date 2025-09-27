@@ -12,3 +12,11 @@ Automates issue labeling and bug fixes via Gemini AI and PyGithub.
 - Webhook hits FastAPI.
 - Orchestrator routes to agents.
 - Triage labels; if bug, fix agent analyzes/posts comment.
+
+## Reliability Check
+Before demos or pushing changes, run the automated tests to verify the
+mocked Gemini/PyGithub flows and webhook signature guardrails remain intact:
+
+```bash
+pytest
+```
