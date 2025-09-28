@@ -1,4 +1,6 @@
 # IssueSwarm: AI-Powered GitHub Issue Triage and Fix Bot
+<img width="1024" height="1024" alt="ChatGPT Image Sep 27, 2025, 09_50_15 PM" src="https://github.com/user-attachments/assets/259eaf40-a1e9-4c11-a5d8-9ddc3e3bcd40" />
+
 
 IssueSwarm is a FastAPI-based webhook service that validates GitHub signatures, triages new issues with Gemini, and posts automated fix suggestions back to GitHub using PyGithub, giving teams instant, AI-assisted feedback when bugs are reported.
 
